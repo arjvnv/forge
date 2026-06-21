@@ -7,6 +7,24 @@ from pydantic import BaseModel, Field
 import uuid
 
 
+class BuildTraceStep(BaseModel):
+    """One compact step in a capability's build trace (for provenance display)."""
+    stage: str          # routing|gap|synthesizing|synthesized|verifying|verified|approved|installed|executing|done
+    ts: float           # epoch seconds
+    detail: str         # short human detail, e.g. "no match (best: 0.41)", "2,410 tokens"
+
+
+class Provenance(BaseModel):
+    """Durable build provenance for a synthesized capability. None for seeds."""
+    build_cost: int = 0                       # input_tokens + output_tokens from synthesis
+    input_tokens: int = 0
+    output_tokens: int = 0
+    trace: list[BuildTraceStep] = []          # compact per-stage trace
+    verification: dict[str, Any] = {}         # data_calls/imports/dunders/sandbox_valid/all_on_allowlist/methods
+    first_run_ms: int = 0                     # routing->done wall-clock for the building run
+    best_similarity: Optional[float] = None   # best match at gap time (may be None)
+
+
 class Manifest(BaseModel):
     """Capability identity — stored in RedisJSON, embedded for routing."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -24,6 +42,7 @@ class Manifest(BaseModel):
     reuse_count: int = 0
     created_at: str = ""
     built_from: list[dict] = []          # provenance: prior capabilities this was synthesized from
+    provenance: Optional[Provenance] = None  # None for seeds (honest baseline); set at build time
 
 
 class Capability(BaseModel):

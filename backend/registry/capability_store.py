@@ -15,7 +15,7 @@ from redisvl.index import AsyncSearchIndex
 from redisvl.schema import IndexSchema
 from redisvl.query import VectorQuery
 
-from backend.schemas import Capability, Manifest, BuildEvent
+from backend.schemas import Capability, Manifest, BuildEvent, Provenance
 
 CAPABILITY_KEY_PREFIX = "forge:cap:"
 VECTOR_INDEX_NAME = "forge-capabilities"
@@ -90,6 +90,17 @@ class CapabilityStore:
     async def increment_reuse(self, cap_id: str):
         key = self._key(cap_id)
         await self._redis.json().numincrby(key, "$.manifest.reuse_count", 1)
+
+    async def update_provenance(self, cap_id: str, provenance: Provenance):
+        """Set the manifest's provenance field on an already-installed capability.
+
+        One additive RedisJSON write, called once at the end of a build (the demo's
+        own write path). Does not touch routing/synthesis/verify/execute behavior.
+        """
+        key = self._key(cap_id)
+        await self._redis.json().set(
+            key, "$.manifest.provenance", provenance.model_dump()
+        )
 
     # ── read ───────────────────────────────────────────────────────────────
 
@@ -179,6 +190,17 @@ class CapabilityStore:
             maxlen=STREAM_MAXLEN,
             approximate=True,
         )
+
+    async def recent_events(self, count: int = 200) -> list[dict]:
+        """Read the most recent N stream events, chronological, without blocking.
+
+        Uses XREVRANGE (newest-first, O(count), no cursor, no open connection) —
+        unlike read_events' blocking xread. Returns oldest-first for the dashboard.
+        """
+        msgs = await self._redis.xrevrange(STREAM_KEY, count=count)
+        out = [{"id": mid, **fields} for mid, fields in msgs]
+        out.reverse()
+        return out
 
     async def read_events(
         self, last_id: str = "0", count: int = 100, block_ms: int = 500
