@@ -42,6 +42,17 @@ SAFE_BUILTINS = {
     "reversed": reversed, "map": map, "filter": filter,
     "any": any, "all": all,
     "isinstance": isinstance, "print": print,
+    # Exception classes. Generated logic routinely wraps float()/dict lookups in
+    # try/except (ValueError, TypeError, KeyError) and occasionally raises. These
+    # must be BOTH referenceable (scope check) AND present in the run namespace
+    # (else `except ValueError` NameErrors at runtime). They are inert classes —
+    # no IO, no introspection, no escape path beyond the dunder block already in
+    # place — so exposing them does not widen the sandbox.
+    "Exception": Exception, "ValueError": ValueError, "TypeError": TypeError,
+    "KeyError": KeyError, "IndexError": IndexError, "AttributeError": AttributeError,
+    "ZeroDivisionError": ZeroDivisionError, "ArithmeticError": ArithmeticError,
+    "OverflowError": OverflowError, "StopIteration": StopIteration,
+    "RuntimeError": RuntimeError,
 }
 
 # Bare names the generated logic may reference as an ast.Name. Derived from the
@@ -54,6 +65,11 @@ ALLOWED_NAMES = set(SAFE_BUILTINS) | {
     # literals / control
     "None", "True", "False",
 }
+
+
+# Non-dunder attribute/method names that are escape-adjacent and never needed by
+# legitimate clinical logic (see _scope_check).
+FORBIDDEN_ATTRS = {"mro", "with_traceback", "add_note"}
 
 
 class ScopeViolation(Exception):
@@ -112,6 +128,15 @@ def _scope_check(code: str) -> None:
             if node.attr.startswith("__") and node.attr.endswith("__"):
                 raise ScopeViolation(
                     f"Dunder attribute access is forbidden: {node.attr}"
+                )
+            # Non-dunder escape-adjacent attributes. mro() walks the type
+            # hierarchy and with_traceback/add_note hang off exception objects;
+            # none has any legitimate use in clinical aggregation logic. Blocking
+            # them keeps the boundary robust even if the dunder block is ever
+            # relaxed (defense in depth).
+            if node.attr in FORBIDDEN_ATTRS:
+                raise ScopeViolation(
+                    f"Attribute access is forbidden: {node.attr}"
                 )
 
         # Method calls: only allow clinic_data.<allowed_method>(...).

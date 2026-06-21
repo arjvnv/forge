@@ -99,6 +99,9 @@ Rules:
    fail verification): len, list, dict, str, int, float, bool, set, tuple, frozenset, abs,
    round, sum, min, max, divmod, pow, range, enumerate, zip, sorted, reversed, map, filter,
    any, all, isinstance, print. (`set` is available — use it for patient-id dedup/intersection.)
+   For error handling you may use these exception classes only: Exception, ValueError,
+   TypeError, KeyError, IndexError, AttributeError, ZeroDivisionError, ArithmeticError,
+   OverflowError, StopIteration, RuntimeError (e.g. `try: x = float(v)` / `except (ValueError, TypeError): x = None`).
 5. `run` MUST return a dict of the shape {{"rows": list[dict], "count": int}}. Each item in
    `rows` is one result record (a flat dict of column -> value). `count` is len(rows).
 6. The manifest 'reads' field lists data sources used (patients/conditions/observations/encounters/medications).
