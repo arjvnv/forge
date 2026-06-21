@@ -29,12 +29,11 @@ _SCHEMA = {
         "storage_type": "json",
     },
     "fields": [
-        {"name": "$.manifest.id",          "type": "tag",    "as": "id"},
-        {"name": "$.manifest.name",        "type": "text",   "as": "name"},
-        {"name": "$.manifest.description", "type": "text",   "as": "description"},
-        {"name": "$.manifest.reuse_count", "type": "numeric","as": "reuse_count"},
-        {"name": "$.embedding",            "type": "vector",
-         "as": "embedding",
+        {"name": "id",          "type": "tag",     "path": "$.manifest.id"},
+        {"name": "name",        "type": "text",    "path": "$.manifest.name"},
+        {"name": "description", "type": "text",    "path": "$.manifest.description"},
+        {"name": "reuse_count", "type": "numeric", "path": "$.manifest.reuse_count"},
+        {"name": "embedding",   "type": "vector",  "path": "$.embedding",
          "attrs": {"dims": 1536, "distance_metric": "cosine", "algorithm": "hnsw"}},
     ],
 }
