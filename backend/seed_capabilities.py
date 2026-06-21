@@ -211,6 +211,21 @@ _SEEDS = [
         "logic": _DIABETES_A1C_LOGIC,
         "reads": ["patients", "conditions", "observations", "encounters"],
         "columns": ["patient_id", "most_recent_a1c", "control_status"],
+        "chart": {
+            "type": "histogram",
+            "title": "Most recent A1c distribution",
+            "rationale": (
+                "A1c distribution with the 9% poor-control line — patients to the "
+                "right need outreach. (Patients with no A1c test in the period are "
+                "excluded from the distribution.)"
+            ),
+            "value": "most_recent_a1c",
+            "aggregate": "distribution",
+            "bins": 12,
+            "thresholds": [
+                {"value": 9, "axis": "x", "label": "9% poor-control line"}
+            ],
+        },
     },
     {
         "slug": "controlling-high-blood-pressure",
@@ -224,6 +239,22 @@ _SEEDS = [
         "logic": _HYPERTENSION_BP_LOGIC,
         "reads": ["patients", "conditions", "observations", "encounters"],
         "columns": ["patient_id", "systolic", "diastolic", "reading_date"],
+        "chart": {
+            "type": "scatter",
+            "title": "Blood pressure readings (systolic vs diastolic)",
+            "rationale": (
+                "Each point is a patient's latest reading; the 140/90 lines mark the "
+                "controlled zone (lower-left). This roster returns only controlled "
+                "patients, so all points fall inside the box."
+            ),
+            "x": "diastolic",
+            "y": "systolic",
+            "aggregate": "none",
+            "thresholds": [
+                {"value": 140, "axis": "y", "label": "140 systolic threshold"},
+                {"value": 90, "axis": "x", "label": "90 diastolic threshold"},
+            ],
+        },
     },
     {
         "slug": "obesity-patient-roster",
@@ -236,6 +267,13 @@ _SEEDS = [
         "logic": _OBESITY_ROSTER_LOGIC,
         "reads": ["patients", "conditions"],
         "columns": ["patient_id", "gender", "birthdate"],
+        "chart": {
+            "type": "donut",
+            "title": "Obesity roster by sex",
+            "rationale": "Sex breakdown of the obesity roster.",
+            "x": "gender",
+            "aggregate": "count",
+        },
     },
 ]
 
@@ -279,10 +317,17 @@ async def seed() -> None:
                 reuse_count=0,
                 created_at=now,
             )
+            ui_spec = {
+                "type": "table",
+                "columns": spec["columns"],
+                "title": spec["name"],
+            }
+            if spec.get("chart"):
+                ui_spec["chart"] = spec["chart"]
             capability = Capability(
                 manifest=manifest,
                 logic=spec["logic"],
-                ui_spec={"type": "table", "columns": spec["columns"], "title": spec["name"]},
+                ui_spec=ui_spec,
                 verified=True,
             )
 
