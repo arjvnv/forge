@@ -51,9 +51,12 @@ Rules:
 1. The logic must be an async Python function named `run(clinic_data, inputs: dict) -> dict`.
 2. It may ONLY call methods from the ClinicDataLayer API below — no raw SQL, no external
    calls, no imports, no use of dunder attributes (e.g. __class__, __globals__).
-3. The manifest 'reads' field lists data sources used (patients/conditions/observations/encounters/medications).
-4. Keep logic simple and correct. Handle edge cases (empty result sets, None values).
-5. Return valid JSON — the full Capability object.
+3. DO NOT write any import statements. `date` and `datetime` from Python's standard library
+   are already pre-injected into the execution namespace — use them directly without importing.
+   Example: `date(2023, 12, 31)` and `datetime.now()` work as-is, no import needed.
+4. The manifest 'reads' field lists data sources used (patients/conditions/observations/encounters/medications).
+5. Keep logic simple and correct. Handle edge cases (empty result sets, None values).
+6. Return valid JSON — the full Capability object.
 
 {_DATA_LAYER_API}
 """
@@ -107,7 +110,7 @@ class Synthesizer:
         )
 
         # Run synchronous Anthropic call in thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         message = await loop.run_in_executor(
             None,
             lambda: self._client.messages.create(
