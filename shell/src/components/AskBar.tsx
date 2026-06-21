@@ -4,8 +4,8 @@ import { C, MONO } from '../theme';
 const EXAMPLES = [
   { label: 'Diabetes A1c over 9%', text: 'Patients with diabetes whose last A1c was over 9%' },
   { label: 'Adults with obesity', text: 'Adults with obesity and a qualifying visit this year' },
-  { label: 'Depression follow-ups', text: 'Patients overdue for a depression screening follow-up' },
-  { label: 'Statin care gaps', text: 'High-risk patients with high LDL who are not on a statin' },
+  { label: 'Statin care gaps', text: 'Patients with LDL cholesterol over 130 who are not on a statin' },
+  { label: 'Diabetes + high LDL', text: 'Diabetic patients who also have high LDL cholesterol' },
 ];
 
 export default function AskBar({
