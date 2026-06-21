@@ -15,6 +15,7 @@ The swarm gets the full spec_text so the comparison is fair — same information
 different mechanism.
 """
 from __future__ import annotations
+import asyncio
 import json
 import re
 import time
@@ -22,6 +23,9 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 import anthropic
+
+# Hard ceiling on a single planner call so a hung API response can't stall the eval run.
+_PLAN_TIMEOUT_S = 60.0
 
 if TYPE_CHECKING:
     from backend.data.clinic_data import ClinicDataLayer
@@ -63,6 +67,67 @@ def _norm_date(d) -> date:
     if isinstance(d, datetime):
         return d.date()
     return d
+
+
+def _as_int(v, default: int) -> int:
+    if isinstance(v, bool):
+        return default
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float_or_none(v):
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_str_list(v) -> list[str]:
+    if not isinstance(v, list):
+        return []
+    return [s for item in v if item is not None and (s := str(item).strip())]
+
+
+def _norm_direction(v, default: str) -> str:
+    if isinstance(v, str) and v.strip().lower() in ("gt", "lt"):
+        return v.strip().lower()
+    return default
+
+
+def _norm_onset(v):
+    if not v:
+        return None
+    try:
+        return date.fromisoformat(str(v)).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_plan(plan: dict) -> dict:
+    """Coerce untrusted planner output to fully-typed plan. LLM may omit fields or
+    return wrong types; normalizing here ensures the worker never raises KeyError /
+    TypeError / asyncpg DataError — mistakes surface as wrong results, not crashes."""
+    return {
+        "age_min": _as_int(plan.get("age_min"), 0),
+        "age_max": _as_int(plan.get("age_max"), 150),
+        "condition_snomed_codes": _as_str_list(plan.get("condition_snomed_codes")),
+        "condition_onset_before": _norm_onset(plan.get("condition_onset_before")),
+        "primary_loinc_codes": _as_str_list(plan.get("primary_loinc_codes")),
+        "secondary_loinc_codes": _as_str_list(plan.get("secondary_loinc_codes")),
+        "paired_obs_required": bool(plan.get("paired_obs_required", False)),
+        "primary_threshold": _as_float_or_none(plan.get("primary_threshold")),
+        "primary_direction": _norm_direction(plan.get("primary_direction"), "gt"),
+        "secondary_threshold": _as_float_or_none(plan.get("secondary_threshold")),
+        "secondary_direction": _norm_direction(plan.get("secondary_direction"), "lt"),
+        "numerator_if_no_primary_obs": bool(plan.get("numerator_if_no_primary_obs", False)),
+        "inverse_measure": bool(plan.get("inverse_measure", False)),
+        "exclusion_snomed_codes": _as_str_list(plan.get("exclusion_snomed_codes")),
+    }
 
 
 class SwarmAgent:
@@ -115,19 +180,34 @@ class SwarmAgent:
             f"Measure spec:\n{spec_text}"
         )
 
-        response = await self._client.messages.create(
-            model=settings.forge_route_model,
-            max_tokens=1024,
-            system=_PLANNER_SYSTEM,
-            messages=[{"role": "user", "content": user_msg}],
+        response = await asyncio.wait_for(
+            self._client.messages.create(
+                model=settings.forge_route_model,
+                max_tokens=1024,
+                system=_PLANNER_SYSTEM,
+                messages=[{"role": "user", "content": user_msg}],
+            ),
+            timeout=_PLAN_TIMEOUT_S,
         )
 
         self.last_input_tokens += response.usage.input_tokens
         self.last_output_tokens += response.usage.output_tokens
 
-        content = response.content[0].text.strip()
+        content = ""
+        for block in response.content:
+            if getattr(block, "type", None) == "text":
+                content = block.text.strip()
+                break
+
         json_match = re.search(r"\{[\s\S]*\}", content)
-        return json.loads(json_match.group() if json_match else content)
+        raw = json_match.group() if json_match else content
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        return _normalize_plan(parsed)
 
     # ── worker ─────────────────────────────────────────────────────────────
 
