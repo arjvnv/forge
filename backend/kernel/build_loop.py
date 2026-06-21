@@ -153,7 +153,11 @@ class BuildLoop:
             capability_id,
             "synthesized",
             f"Logic generated: {capability.manifest.name}",
-            {"manifest": capability.manifest.model_dump()},
+            {
+                "manifest": capability.manifest.model_dump(),
+                "input_tokens": self.synthesizer.last_input_tokens,
+                "output_tokens": self.synthesizer.last_output_tokens,
+            },
         )
 
         # ── verifying ────────────────────────────────────────────────────────
