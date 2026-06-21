@@ -12,13 +12,18 @@ class Manifest(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     description: str  # embedded for semantic routing
-    inputs: dict[str, str] = {}           # field -> "type = default"
-    output: dict[str, str] = {}           # field -> type
+    # These are descriptive metadata the synthesizer fills in (never used for
+    # execution). Values are dict[str, Any] not dict[str, str]: the model
+    # naturally emits real lists/objects here (e.g. output={"columns": [...]}),
+    # and rejecting those failed otherwise-valid syntheses on schema validation.
+    inputs: dict[str, Any] = {}           # field -> "type = default" (or richer)
+    output: dict[str, Any] = {}           # field -> type (or richer)
     reads: list[str] = []                 # data_source_ids
     actions: list[str] = []              # action_ids
-    scope: dict[str, str] = {}           # action_id -> constraint
+    scope: dict[str, Any] = {}           # action_id -> constraint (or richer)
     reuse_count: int = 0
     created_at: str = ""
+    built_from: list[dict] = []          # provenance: prior capabilities this was synthesized from
 
 
 class Capability(BaseModel):

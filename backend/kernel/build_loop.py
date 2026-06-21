@@ -184,6 +184,9 @@ class BuildLoop:
         # Force the pre-generated UUID so every downstream artifact + event
         # shares one id (the one the client is already listening on).
         capability.manifest.id = capability_id
+        # Persist provenance on the manifest so the installed capability records
+        # which prior patterns it was built from (powers the library lineage view).
+        capability.manifest.built_from = built_from
 
         yield await self._emit(
             capability_id,

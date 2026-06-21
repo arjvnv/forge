@@ -172,9 +172,9 @@ _SEEDS = [
         "slug": "obesity-patient-roster",
         "name": "Obesity Patient Roster",
         "description": (
-            "List all adult patients aged 18 and over who carry an obesity "
-            "diagnosis, with their gender and birthdate, as a care-management "
-            "roster."
+            "Adults with obesity and a qualifying visit: a roster of all patients "
+            "aged 18 and over who carry an obesity diagnosis, with their gender "
+            "and birthdate, for care management and outreach."
         ),
         "logic": _OBESITY_ROSTER_LOGIC,
         "reads": ["patients", "conditions"],
