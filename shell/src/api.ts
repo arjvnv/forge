@@ -1,4 +1,10 @@
-import type { BuildEvent, ExecutionResult, Manifest } from './types';
+import type {
+  BuildEvent,
+  Capability,
+  ExecutionResult,
+  HealthStatus,
+  Manifest,
+} from './types';
 
 const BASE = 'http://localhost:8000';
 
@@ -104,5 +110,16 @@ export async function runCapability(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ measurement_year }),
   });
+  return asJson(res);
+}
+
+/** Full capability incl. logic source, ui_spec, and verified flag. */
+export async function getCapability(capabilityId: string): Promise<Capability> {
+  const res = await fetch(`${BASE}/capabilities/${capabilityId}`);
+  return asJson(res);
+}
+
+export async function getHealth(): Promise<HealthStatus> {
+  const res = await fetch(`${BASE}/health`);
   return asJson(res);
 }
