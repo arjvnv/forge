@@ -25,7 +25,7 @@ from backend.kernel.router import Router, embed
 from backend.kernel.synthesizer import Synthesizer, SynthesisError
 from backend.kernel.verifier import verify
 from backend.registry.capability_store import CapabilityStore
-from backend.schemas import BuildEvent, Capability, IntentRequest
+from backend.schemas import BuildEvent, Capability, IntentRequest, RouteResult
 
 APPROVAL_TIMEOUT_S = 300.0
 
@@ -72,11 +72,11 @@ class BuildLoop:
 
         try:
             route = await self.router.route(request.text)
-        except Exception as e:
-            yield await self._emit(
-                capability_id, "error", f"Routing failed: {e}"
-            )
-            return
+        except Exception:
+            # A routing hiccup (e.g. a slow embedding call) must not kill the
+            # request — degrade to a miss and build from scratch. embedding stays
+            # None, so compounding retrieval is skipped this run.
+            route = RouteResult(hit=False)
 
         # ── reuse path ───────────────────────────────────────────────────────
         if route.hit and route.capability_id:

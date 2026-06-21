@@ -67,36 +67,48 @@ def load_conditions(conn, csv_dir: str):
 
 
 def load_observations(conn, csv_dir: str):
+    """Load ALL observations (labs, vitals, BMI, etc.), not just A1c/BP.
+
+    Numeric values are coerced to float; categorical observations keep value=None
+    but the row still records that the observation occurred. Batched with
+    execute_values because Synthea emits ~1M observation rows.
+    """
+    from psycopg2.extras import execute_values
     path = os.path.join(csv_dir, "observations.csv")
     df = pd.read_csv(path, dtype=str)
     df = df.rename(columns=str.lower)
-    # Only load numeric observations we care about
-    target_codes = {
-        "4548-4", "4549-2", "17856-6",  # A1c
-        "8480-6", "8462-4",              # BP systolic / diastolic
-    }
-    df = df[df["code"].isin(target_codes)].copy()
+
+    values = pd.to_numeric(df["value"], errors="coerce")
+    dates = pd.to_datetime(df["date"], errors="coerce")
+    desc_col = df["description"] if "description" in df.columns else [""] * len(df)
+    units_col = df["units"] if "units" in df.columns else [""] * len(df)
+
+    rows = []
+    for pid, code, desc, val, units, dt in zip(
+        df["patient"], df["code"], desc_col, values, units_col, dates
+    ):
+        if pd.isna(dt):
+            continue
+        rows.append((
+            str(uuid.uuid4()),
+            pid,
+            code,
+            "" if pd.isna(desc) else str(desc),
+            None if pd.isna(val) else float(val),
+            "" if pd.isna(units) else str(units),
+            dt.date(),
+        ))
+
     with conn.cursor() as cur:
-        for _, r in df.iterrows():
-            try:
-                val = float(r["value"]) if pd.notna(r.get("value")) else None
-            except (ValueError, TypeError):
-                val = None
-            cur.execute(
-                "INSERT INTO observations(id, patient_id, code, description, value, units, date) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                (
-                    str(uuid.uuid4()),
-                    r.patient,
-                    r.code,
-                    r.get("description", ""),
-                    val,
-                    r.get("units", ""),
-                    pd.to_datetime(r.date, errors="coerce").date(),
-                ),
-            )
+        execute_values(
+            cur,
+            "INSERT INTO observations(id, patient_id, code, description, value, units, date) "
+            "VALUES %s ON CONFLICT DO NOTHING",
+            rows,
+            page_size=5000,
+        )
     conn.commit()
-    print(f"  observations (filtered): {len(df)} rows")
+    print(f"  observations: {len(rows)} rows")
 
 
 def load_encounters(conn, csv_dir: str):

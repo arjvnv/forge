@@ -18,7 +18,7 @@ def _embed_sync(text: str) -> list[float]:
         "https://api.openai.com/v1/embeddings",
         headers={"Authorization": f"Bearer {settings.openai_api_key}"},
         json={"model": settings.forge_embed_model, "input": text},
-        timeout=10,
+        timeout=30,
     )
     if resp.status_code != 200:
         return [0.0] * 1536
