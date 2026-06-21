@@ -132,7 +132,7 @@ async def events(capability_id: str):
 
     async def event_generator():
         last_id = "0"
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         deadline = loop.time() + SSE_TIMEOUT_S
 
         while True:
