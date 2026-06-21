@@ -18,7 +18,6 @@ export interface IntelligenceState {
   capDetail: Record<string, Capability>;
   health: Health;
   events: StreamEvent[];
-  sessionStartTs: number | null;
   loaded: boolean;
   requestDetail: (id: string) => void;
 }
@@ -32,12 +31,10 @@ export function useIntelligence(): IntelligenceState {
     reachable: false,
   });
   const [events, setEvents] = useState<StreamEvent[]>([]);
-  const [sessionStartTs, setSessionStartTs] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   // Stable refs that polling closures read without re-subscribing.
   const seenIds = useRef<Set<string>>(new Set());
-  const sessionAnchored = useRef(false);
   const detailRequested = useRef<Set<string>>(new Set());
 
   const mergeEvents = useCallback((incoming: StreamEvent[]) => {
@@ -63,12 +60,6 @@ export function useIntelligence(): IntelligenceState {
   const pollStream = useCallback(async () => {
     try {
       const evs = await getStream(STREAM_COUNT);
-      // Anchor the session boundary at the newest event seen on first load.
-      if (!sessionAnchored.current) {
-        sessionAnchored.current = true;
-        const newest = evs.reduce((m, e) => (e.ts > m ? e.ts : m), 0);
-        setSessionStartTs(newest > 0 ? newest : Date.now() / 1000);
-      }
       mergeEvents(evs);
     } catch {
       // transient; health poll surfaces the connection state
@@ -119,7 +110,6 @@ export function useIntelligence(): IntelligenceState {
     capDetail,
     health,
     events,
-    sessionStartTs,
     loaded,
     requestDetail,
   };

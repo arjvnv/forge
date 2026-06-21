@@ -85,7 +85,7 @@ describe('deriveRoutingDecisions', () => {
       ev('b1', 'synthesized', 110, { input_tokens: 1800, output_tokens: 610 }),
       ev('b1', 'done', 118.4, { result: { count: 31 } }),
     ];
-    const [d] = deriveRoutingDecisions(events, [], 100);
+    const [d] = deriveRoutingDecisions(events, []);
     expect(d.kind).toBe('BUILT');
     expect(d.query).toBe('find hypertensive patients');
     expect(d.similarity).toBe(0.41);
@@ -101,7 +101,7 @@ describe('deriveRoutingDecisions', () => {
       ev('r1', 'executing', 201.1),
       ev('r1', 'done', 201.4, { result: { count: 12 } }),
     ];
-    const [d] = deriveRoutingDecisions(events, [builtCap], 200);
+    const [d] = deriveRoutingDecisions(events, [builtCap]);
     expect(d.kind).toBe('REUSED');
     expect(d.name).toBe('New Roster');
     expect(d.similarity).toBe(0.91);
@@ -114,20 +114,24 @@ describe('deriveRoutingDecisions', () => {
       ev('r2', 'reuse', 301, { capability_id: 'cap-seed', similarity: 0.88 }),
       ev('r2', 'done', 301.3, { result: { count: 5 } }),
     ];
-    const [d] = deriveRoutingDecisions(events, [seedCap], 300);
+    const [d] = deriveRoutingDecisions(events, [seedCap]);
     expect(d.statsLine).toContain('Saved ~0 tokens');
   });
 
-  it('excludes decisions before the session start', () => {
+  it('shows ALL decisions in the window regardless of when the dashboard opened (regression: no session-anchor gate)', () => {
+    // Both decisions must appear — the old "since dashboard load" gate dropped
+    // pre-open activity and left the panel empty despite real stream events.
     const events: StreamEvent[] = [
       ev('old', 'routing', 50, { text: 'old query' }),
       ev('old', 'gap', 51, { best_similarity: 0.2 }),
       ev('new', 'routing', 200, { text: 'new query' }),
       ev('new', 'gap', 201, { best_similarity: 0.3 }),
     ];
-    const decisions = deriveRoutingDecisions(events, [], 100);
-    expect(decisions).toHaveLength(1);
+    const decisions = deriveRoutingDecisions(events, []);
+    expect(decisions).toHaveLength(2);
+    // newest-first
     expect(decisions[0].query).toBe('new query');
+    expect(decisions[1].query).toBe('old query');
   });
 
   it('marks an unfinished decision as in-progress', () => {
@@ -136,7 +140,7 @@ describe('deriveRoutingDecisions', () => {
       ev('p1', 'gap', 401, { best_similarity: 0.4 }),
       ev('p1', 'synthesizing', 402),
     ];
-    const [d] = deriveRoutingDecisions(events, [], 400);
+    const [d] = deriveRoutingDecisions(events, []);
     expect(d.inProgress).toBe(true);
     expect(d.latestStage).toBe('synthesizing');
   });
@@ -155,7 +159,7 @@ describe('deriveStats', () => {
       ev('r1', 'reuse', 201, { capability_id: 'cap-built', similarity: 0.91 }),
       ev('r1', 'done', 201.4, { result: { count: 12 } }),
     ];
-    const decisions = deriveRoutingDecisions(events, [builtCap], 100);
+    const decisions = deriveRoutingDecisions(events, [builtCap]);
     const stats = deriveStats(decisions);
     expect(stats.total).toBe(2);
     expect(stats.builtCount).toBe(1);

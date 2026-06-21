@@ -19,14 +19,13 @@ export default function App() {
     capDetail,
     health,
     events,
-    sessionStartTs,
     loaded,
     requestDetail,
   } = useIntelligence();
 
   const decisions = useMemo(
-    () => deriveRoutingDecisions(events, capabilities, sessionStartTs),
-    [events, capabilities, sessionStartTs],
+    () => deriveRoutingDecisions(events, capabilities),
+    [events, capabilities],
   );
   const stats = useMemo(() => deriveStats(decisions), [decisions]);
   const streamRows = useMemo(() => deriveStreamRows(events, capabilities), [events, capabilities]);

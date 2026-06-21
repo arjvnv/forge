@@ -93,11 +93,15 @@ function num(v: unknown): number | null {
   return typeof v === 'number' && !Number.isNaN(v) ? v : null;
 }
 
-// Build routing decisions from the session window, newest-first.
+// Build routing decisions from the recent stream window, newest-first.
+// Intentionally NOT gated by a "since dashboard load" anchor: that made the
+// panel render empty whenever queries were run before the dashboard was opened
+// (or after any refresh), even though the stream clearly had activity. The
+// client already holds only a recent, deduped, capped window, so deriving from
+// all of it is both robust (never empty-despite-activity) and still live.
 export function deriveRoutingDecisions(
   events: StreamEvent[],
   caps: Manifest[],
-  sessionStartTs: number | null,
 ): RoutingDecision[] {
   const costMap = buildCostMap(caps);
   const nameById: Record<string, string> = {};
@@ -110,8 +114,6 @@ export function deriveRoutingDecisions(
     const evs = g.events;
     const routing = evs.find((e) => e.stage === 'routing');
     const startTs = routing?.ts ?? evs[0].ts;
-    // Session boundary: only decisions started at/after dashboard load.
-    if (sessionStartTs != null && startTs < sessionStartTs) continue;
 
     const reuse = evs.find((e) => e.stage === 'reuse');
     const gap = evs.find((e) => e.stage === 'gap');
