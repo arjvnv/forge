@@ -12,15 +12,25 @@ pytestmark = pytest.mark.asyncio
 
 
 class StubSynth:
-    """Drop-in for Synthesizer.synthesize without calling Claude."""
+    """Drop-in for Synthesizer.synthesize without calling Claude.
 
-    def __init__(self, capability=None, error=None):
+    Mirrors the real Synthesizer's token attributes (set after synthesize()), which
+    BuildLoop now reads into the `synthesized` event payload.
+    """
+
+    def __init__(self, capability=None, error=None, input_tokens=11, output_tokens=7):
         self._cap = capability
         self._error = error
+        self.last_input_tokens = 0
+        self.last_output_tokens = 0
+        self._input_tokens = input_tokens
+        self._output_tokens = output_tokens
 
     async def synthesize(self, intent, measurement_year=2023):
         if self._error:
             raise self._error
+        self.last_input_tokens = self._input_tokens
+        self.last_output_tokens = self._output_tokens
         return self._cap
 
 
@@ -90,6 +100,12 @@ async def test_full_build_happy_path(store, clinic):
     assert installed.verified is True
     assert installed.manifest.id == "build-2"
     assert events[-1].payload["result"]["count"] == 3
+
+    # The synthesized event carries the synthesizer's token counts (consumed by the
+    # eval harness to report Forge build cost).
+    synth_event = next(e for e in events if e.stage == "synthesized")
+    assert synth_event.payload["input_tokens"] == 11
+    assert synth_event.payload["output_tokens"] == 7
 
 
 async def test_synthesis_error_stops(store, clinic):
