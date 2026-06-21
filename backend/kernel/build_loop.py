@@ -189,9 +189,23 @@ class BuildLoop:
         finally:
             self._approval_gates.pop(capability_id, None)
 
+        yield await self._emit(capability_id, "approved", "Approved.")
+
+        # ── execute ──────────────────────────────────────────────────────────
+        # Run BEFORE persisting: a capability only earns a place in the registry
+        # (becoming a durable, reusable tool) if it actually executes cleanly.
+        # One that fails here never gets installed, so the library never holds a
+        # broken capability.
         yield await self._emit(
-            capability_id, "approved", "Approved. Installing..."
+            capability_id, "executing", "Running against clinic data..."
         )
+        try:
+            result = await self.executor.execute(
+                capability, inputs, self.clinic_data
+            )
+        except ExecutionError as e:
+            yield await self._emit(capability_id, "error", str(e))
+            return
 
         # ── install ──────────────────────────────────────────────────────────
         try:
@@ -205,21 +219,9 @@ class BuildLoop:
         yield await self._emit(
             capability_id,
             "installed",
-            "Capability installed.",
+            "Capability installed and reusable.",
             {"capability_id": installed_id},
         )
-
-        # ── execute ──────────────────────────────────────────────────────────
-        yield await self._emit(
-            capability_id, "executing", "Running against clinic data..."
-        )
-        try:
-            result = await self.executor.execute(
-                capability, inputs, self.clinic_data
-            )
-        except ExecutionError as e:
-            yield await self._emit(capability_id, "error", str(e))
-            return
 
         yield await self._emit(
             capability_id, "done", "Complete", {"result": result}

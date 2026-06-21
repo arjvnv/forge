@@ -22,16 +22,35 @@ ALLOWED_DATA_METHODS = {
     "get_all_patient_ids",
 }
 
-# Bare names (builtins + injected helpers) the generated logic may reference.
-# Anything else referenced as an ast.Name is rejected. This is an allowlist,
-# not a denylist — denylists are trivially bypassable.
-ALLOWED_NAMES = {
+# Single source of truth for the builtins available to generated logic. BOTH the
+# verifier's sandbox run AND the executor's live run import this exact dict, so
+# the two namespaces can never drift apart (a capability that passed
+# verification is only safe to run in an identical namespace).
+#
+# Every entry is a pure, side-effect-free builtin: no IO (open/input), no
+# introspection (type/getattr/vars/dir/globals), no code execution
+# (eval/exec/compile/__import__). Clinical aggregation logic needs set/sum/
+# tuple/round/abs constantly — omitting them was causing legitimate generated
+# capabilities to fail verification.
+SAFE_BUILTINS = {
+    "len": len, "list": list, "dict": dict, "str": str, "int": int,
+    "float": float, "bool": bool, "set": set, "tuple": tuple,
+    "frozenset": frozenset,
+    "abs": abs, "round": round, "sum": sum, "min": min, "max": max,
+    "divmod": divmod, "pow": pow,
+    "range": range, "enumerate": enumerate, "zip": zip, "sorted": sorted,
+    "reversed": reversed, "map": map, "filter": filter,
+    "any": any, "all": all,
+    "isinstance": isinstance, "print": print,
+}
+
+# Bare names the generated logic may reference as an ast.Name. Derived from the
+# safe builtins above plus the injected sandbox names and literals. Anything
+# else is rejected. This is an allowlist, not a denylist — denylists are
+# trivially bypassable.
+ALLOWED_NAMES = set(SAFE_BUILTINS) | {
     # injected into the sandbox namespace
     "clinic_data", "inputs", "date", "datetime",
-    # whitelisted builtins (must mirror _sandbox_run's __builtins__)
-    "len", "list", "dict", "str", "int", "float",
-    "range", "enumerate", "zip", "any", "all", "max", "min", "sorted",
-    "print", "isinstance", "bool",
     # literals / control
     "None", "True", "False",
 }
@@ -64,8 +83,10 @@ def _scope_check(code: str) -> None:
     # in ALLOWED_NAMES.
     local_names: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            local_names.add(node.name)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            # Lambdas have args but no name; named functions have both.
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                local_names.add(node.name)
             for arg in (*node.args.posonlyargs, *node.args.args,
                         *node.args.kwonlyargs):
                 local_names.add(arg.arg)
@@ -128,13 +149,7 @@ async def _sandbox_run(logic: str, inputs: dict) -> dict:
     """Execute the generated `run` function in a restricted namespace."""
     from datetime import date, datetime
     namespace: dict[str, Any] = {
-        "__builtins__": {
-            "len": len, "list": list, "dict": dict, "str": str, "int": int,
-            "float": float, "range": range, "enumerate": enumerate, "zip": zip,
-            "any": any, "all": all, "max": max, "min": min, "sorted": sorted,
-            "print": print, "isinstance": isinstance, "type": type, "bool": bool,
-            "None": None, "True": True, "False": False,
-        },
+        "__builtins__": dict(SAFE_BUILTINS),
         "date": date,
         "datetime": datetime,
     }

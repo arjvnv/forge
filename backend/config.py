@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     forge_embed_model: str = "text-embedding-3-small"
     forge_synth_model: str = "claude-opus-4-8"
     forge_route_model: str = "claude-sonnet-4-6"
-    similarity_threshold: float = 0.85
+    similarity_threshold: float = 0.62
     arize_api_key: str = ""
     arize_space_key: str = ""
     arize_project_name: str = "forge-eval"

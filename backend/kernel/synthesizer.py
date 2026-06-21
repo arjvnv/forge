@@ -38,6 +38,28 @@ Database schema (Synthea CSV → Postgres):
 - medications: patient_id, code, description, start, stop
 """
 
+# Kept out of the f-string below so its braces don't need escaping.
+_WORKED_EXAMPLE = '''
+Worked example of a correct `logic` body (this is what the escaped string should contain):
+
+async def run(clinic_data, inputs):
+    year = inputs.get("measurement_year", 2023)
+    period_start = date(year, 1, 1)
+    period_end = date(year, 12, 31)
+    eligible = await clinic_data.get_patients_in_age_range(18, 75, period_end)
+    eligible_ids = set(p["id"] for p in eligible)
+    with_condition = await clinic_data.get_patients_with_condition(["44054006"], period_end)
+    target_ids = eligible_ids & set(with_condition)
+    rows = []
+    for pid in target_ids:
+        if not await clinic_data.had_qualifying_visit(pid, period_start, period_end):
+            continue
+        obs = await clinic_data.get_most_recent_observation(pid, ["4548-4"], period_start, period_end)
+        value = float(obs["value"]) if obs and obs["value"] is not None else None
+        rows.append({"patient_id": pid, "value": value})
+    return {"rows": rows, "count": len(rows)}
+'''
+
 _SYSTEM = f"""You are Forge's capability synthesizer. Given a plain-language intent from a clinic coordinator,
 you produce a Capability JSON with a manifest and executable Python logic.
 
@@ -54,11 +76,18 @@ Rules:
 3. DO NOT write any import statements. `date` and `datetime` from Python's standard library
    are already pre-injected into the execution namespace — use them directly without importing.
    Example: `date(2023, 12, 31)` and `datetime.now()` work as-is, no import needed.
-4. The manifest 'reads' field lists data sources used (patients/conditions/observations/encounters/medications).
-5. Keep logic simple and correct. Handle edge cases (empty result sets, None values).
-6. Return valid JSON — the full Capability object.
+4. You may ONLY use these Python builtins (no others — referencing any other builtin will
+   fail verification): len, list, dict, str, int, float, bool, set, tuple, frozenset, abs,
+   round, sum, min, max, divmod, pow, range, enumerate, zip, sorted, reversed, map, filter,
+   any, all, isinstance, print. (`set` is available — use it for patient-id dedup/intersection.)
+5. `run` MUST return a dict of the shape {{"rows": list[dict], "count": int}}. Each item in
+   `rows` is one result record (a flat dict of column -> value). `count` is len(rows).
+6. The manifest 'reads' field lists data sources used (patients/conditions/observations/encounters/medications).
+7. Keep logic simple and correct. Handle edge cases (empty result sets, None values).
+8. Return valid JSON — the full Capability object.
 
 {_DATA_LAYER_API}
+{_WORKED_EXAMPLE}
 """
 
 _USER_TEMPLATE = """Intent: {intent}

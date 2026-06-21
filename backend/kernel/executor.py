@@ -14,7 +14,12 @@ import time
 from typing import Any
 
 from backend.data.clinic_data import ClinicDataLayer
-from backend.kernel.verifier import _scope_check, ScopeViolation, VerificationError
+from backend.kernel.verifier import (
+    _scope_check,
+    ScopeViolation,
+    VerificationError,
+    SAFE_BUILTINS,
+)
 from backend.schemas import Capability
 
 
@@ -23,17 +28,11 @@ class ExecutionError(Exception):
     pass
 
 
-# Restricted builtins for exec'd logic. MUST mirror verifier._sandbox_run's
-# __builtins__ exactly — logic that passed verification is only safe to run in
-# an identical namespace. If you change one, change the other.
+# Restricted builtins for exec'd logic. Imported directly from the verifier so
+# the live-run namespace is byte-for-byte identical to the one logic was
+# verified against — they can never drift.
 def _restricted_builtins() -> dict[str, Any]:
-    return {
-        "len": len, "list": list, "dict": dict, "str": str, "int": int,
-        "float": float, "range": range, "enumerate": enumerate, "zip": zip,
-        "any": any, "all": all, "max": max, "min": min, "sorted": sorted,
-        "print": print, "isinstance": isinstance, "type": type, "bool": bool,
-        "None": None, "True": True, "False": False,
-    }
+    return dict(SAFE_BUILTINS)
 
 
 class Executor:

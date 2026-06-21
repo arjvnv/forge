@@ -7,6 +7,7 @@ Capability registry backed by Redis.
 from __future__ import annotations
 import json
 import time
+from datetime import date, datetime
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -20,6 +21,20 @@ CAPABILITY_KEY_PREFIX = "forge:cap:"
 VECTOR_INDEX_NAME = "forge-capabilities"
 STREAM_KEY = "forge:build-events"
 STREAM_MAXLEN = 10000  # cap global event-bus growth (approximate trim)
+
+
+def _json_default(o):
+    """Serialize values the stdlib JSON encoder can't handle on its own.
+
+    Generated/synthesized capability logic returns result rows straight from the
+    data layer, which can contain asyncpg `date`/`datetime` objects. Without this
+    the `json.dumps` in `emit` raises and crashes the whole build at the final
+    `done` event. date/datetime -> ISO string; anything else -> str so the event
+    stream can never be broken by an unexpected value type.
+    """
+    if isinstance(o, (date, datetime)):
+        return o.isoformat()
+    return str(o)
 
 
 _SCHEMA = {
@@ -55,24 +70,31 @@ class CapabilityStore:
         if self._redis:
             await self._redis.aclose()
 
+    def _key(self, cap_id: str) -> str:
+        """Build a Redis key from a capability id, tolerating an id that already
+        carries the prefix (RedisVL hands back full document keys)."""
+        if cap_id.startswith(CAPABILITY_KEY_PREFIX):
+            return cap_id
+        return f"{CAPABILITY_KEY_PREFIX}{cap_id}"
+
     # ── write ──────────────────────────────────────────────────────────────
 
     async def save(self, cap: Capability, embedding: list[float]) -> str:
         cap_id = cap.manifest.id
-        key = f"{CAPABILITY_KEY_PREFIX}{cap_id}"
+        key = self._key(cap_id)
         data = json.loads(cap.model_dump_json())
         data["embedding"] = embedding
         await self._redis.json().set(key, "$", data)
         return cap_id
 
     async def increment_reuse(self, cap_id: str):
-        key = f"{CAPABILITY_KEY_PREFIX}{cap_id}"
+        key = self._key(cap_id)
         await self._redis.json().numincrby(key, "$.manifest.reuse_count", 1)
 
     # ── read ───────────────────────────────────────────────────────────────
 
     async def get(self, cap_id: str) -> Optional[Capability]:
-        key = f"{CAPABILITY_KEY_PREFIX}{cap_id}"
+        key = self._key(cap_id)
         raw = await self._redis.json().get(key, "$")
         if not raw:
             return None
@@ -112,7 +134,7 @@ class CapabilityStore:
                 "capability_id": event.capability_id,
                 "stage": event.stage,
                 "message": event.message,
-                "payload": json.dumps(event.payload),
+                "payload": json.dumps(event.payload, default=_json_default),
                 "ts": str(time.time()),
             },
             maxlen=STREAM_MAXLEN,

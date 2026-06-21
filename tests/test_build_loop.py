@@ -91,7 +91,7 @@ async def test_full_build_happy_path(store, clinic):
     stages = [e.stage for e in events]
     assert stages == [
         "routing", "gap", "synthesizing", "synthesized", "verifying",
-        "verified", "approved", "installed", "executing", "done",
+        "verified", "approved", "executing", "installed", "done",
     ]
     # Manifest id was overridden to the pre-generated build id everywhere.
     assert all(e.capability_id == "build-2" for e in events)

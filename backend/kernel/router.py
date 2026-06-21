@@ -9,7 +9,7 @@ import asyncio
 import httpx
 
 from backend.config import settings
-from backend.registry.capability_store import CapabilityStore
+from backend.registry.capability_store import CapabilityStore, CAPABILITY_KEY_PREFIX
 from backend.schemas import RouteResult
 
 
@@ -30,7 +30,7 @@ async def embed(text: str) -> list[float]:
         # Graceful degrade: routing always misses, build loop still works without embeddings.
         return [0.0] * 1536
     # httpx.post is blocking; offload to a thread so the event loop stays free.
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _embed_sync, text)
 
 
@@ -50,9 +50,18 @@ class Router:
         similarity = 1.0 - distance
 
         if similarity >= settings.similarity_threshold:
+            # RedisVL returns the Redis document key (forge:cap:<uuid>) as `id`,
+            # which shadows our indexed manifest-id field. Strip the prefix so the
+            # rest of the kernel gets the bare capability id it expects.
+            raw_id = top.get("id", "")
+            cap_id = (
+                raw_id[len(CAPABILITY_KEY_PREFIX):]
+                if raw_id.startswith(CAPABILITY_KEY_PREFIX)
+                else raw_id
+            )
             return RouteResult(
                 hit=True,
-                capability_id=top["id"],
+                capability_id=cap_id,
                 similarity=similarity,
             )
         return RouteResult(hit=False, similarity=similarity)
