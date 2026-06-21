@@ -6,7 +6,7 @@ interface IntentBarProps {
 }
 
 const PLACEHOLDER =
-  "Describe the tool you need, e.g. 'show me diabetic patients whose most recent A1c was over 9%'";
+  'Describe a clinical tool to forge — e.g. find diabetic patients whose most recent A1c was over 9%';
 
 export default function IntentBar({ onSubmit, disabled }: IntentBarProps) {
   const [text, setText] = useState('');
@@ -36,7 +36,7 @@ export default function IntentBar({ onSubmit, disabled }: IntentBarProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-xl border border-slate-700 bg-slate-800 p-4 shadow-lg transition-all duration-200"
+      className="rounded-2xl border border-forge-border bg-forge-surface p-1.5 transition-all duration-200 focus-within:border-forge-ember/60 focus-within:shadow-[0_0_24px_-6px_rgba(245,158,11,0.45)]"
     >
       <textarea
         value={text}
@@ -46,16 +46,21 @@ export default function IntentBar({ onSubmit, disabled }: IntentBarProps) {
         disabled={disabled}
         placeholder={PLACEHOLDER}
         maxLength={4000}
-        className="w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100 placeholder:text-slate-500 outline-none transition-all duration-200 focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full resize-none border-0 bg-transparent px-4 py-3 font-sans text-[15px] leading-relaxed text-forge-text outline-none placeholder:text-forge-faint focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
       />
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-xs text-slate-500">⌘/Ctrl + Enter to build</span>
+      <div className="flex items-center justify-between px-3 pb-2 pt-1">
+        <span className="flex items-center gap-1.5 font-mono text-xs text-forge-faint">
+          <kbd className="rounded border border-forge-border bg-forge-raised px-1.5 py-0.5 font-mono text-[11px] text-forge-muted">
+            ⌘ ↵
+          </kbd>
+          forge
+        </span>
         <button
           type="submit"
           disabled={!canSubmit}
-          className="rounded-lg bg-blue-600 px-5 py-2 font-semibold text-white transition-all duration-200 hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+          className="rounded-xl bg-forge-ember px-6 py-2.5 font-mono text-sm font-semibold uppercase tracking-wider text-forge-void shadow-[0_0_20px_-4px_rgba(245,158,11,0.6)] transition-all duration-200 hover:bg-forge-emberhi hover:shadow-[0_0_28px_-2px_rgba(245,158,11,0.7)] focus-visible:ring-2 focus-visible:ring-forge-ember/60 focus-visible:ring-offset-2 focus-visible:ring-offset-forge-void active:bg-forge-emberlo disabled:cursor-not-allowed disabled:bg-forge-raised disabled:text-forge-ghost disabled:shadow-none"
         >
-          {disabled ? 'Building…' : 'Build'}
+          {disabled ? 'Forging…' : 'Forge'}
         </button>
       </div>
     </form>

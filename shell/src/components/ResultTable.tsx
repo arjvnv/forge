@@ -25,9 +25,12 @@ export default function ResultTable({ result }: ResultTableProps) {
 
   if (count === 0 || rows.length === 0) {
     return (
-      <section className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-        <p className="text-sm text-slate-400">
-          No patients matched the criteria
+      <section className="rounded-2xl border border-forge-border bg-forge-surface p-5">
+        <p className="text-sm text-forge-muted">
+          <span aria-hidden className="mr-1.5 text-forge-faint">
+            ○
+          </span>
+          No patients matched the criteria.
         </p>
       </section>
     );
@@ -42,21 +45,25 @@ export default function ResultTable({ result }: ResultTableProps) {
   const truncated = rows.length > MAX_ROWS;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800">
-      <header className="border-b border-slate-700 px-4 py-3">
-        <span className="font-semibold text-green-400">
+    <section className="overflow-hidden rounded-2xl border border-forge-border bg-forge-surface">
+      <header className="flex items-center justify-between border-b border-forge-border px-4 py-3">
+        <span className="flex items-center gap-2 font-mono text-sm text-forge-forged">
+          <span aria-hidden className="text-[10px] leading-none">
+            ●
+          </span>
           {count} {count === 1 ? 'patient' : 'patients'} matched
         </span>
       </header>
 
-      <div className="max-h-96 overflow-auto">
+      <div className="max-h-[28rem] overflow-auto">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="sticky top-0 bg-slate-900">
+          <thead>
             <tr>
               {columns.map((col) => (
                 <th
                   key={col}
-                  className="whitespace-nowrap px-4 py-2 font-semibold text-slate-300"
+                  scope="col"
+                  className="sticky top-0 whitespace-nowrap border-b border-forge-border bg-forge-base px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider text-forge-faint"
                 >
                   {col}
                 </th>
@@ -67,18 +74,28 @@ export default function ResultTable({ result }: ResultTableProps) {
             {visible.map((row, ri) => (
               <tr
                 key={ri}
-                className={ri % 2 === 0 ? 'bg-slate-800' : 'bg-slate-800/50'}
+                className={`transition-colors hover:bg-forge-ember/[0.04] ${
+                  ri % 2 === 0 ? 'bg-forge-surface' : 'bg-forge-raised/40'
+                }`}
               >
-                {columns.map((col) => (
-                  <td
-                    key={col}
-                    className={`whitespace-nowrap px-4 py-2 text-slate-200 ${
-                      isIdColumn(col) ? 'font-mono text-xs' : ''
-                    }`}
-                  >
-                    {renderCell((row as ResultRow)[col])}
-                  </td>
-                ))}
+                {columns.map((col) => {
+                  const value = (row as ResultRow)[col];
+                  const empty = value === null || value === undefined;
+                  return (
+                    <td
+                      key={col}
+                      className={`whitespace-nowrap px-4 py-2.5 text-sm ${
+                        empty
+                          ? 'text-forge-faint'
+                          : isIdColumn(col)
+                            ? 'font-mono text-xs text-forge-muted'
+                            : 'text-forge-text'
+                      }`}
+                    >
+                      {renderCell(value)}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -86,7 +103,7 @@ export default function ResultTable({ result }: ResultTableProps) {
       </div>
 
       {truncated && (
-        <footer className="border-t border-slate-700 px-4 py-2 text-xs text-slate-500">
+        <footer className="border-t border-forge-border px-4 py-2 font-mono text-[11px] text-forge-faint">
           Showing first {MAX_ROWS} of {rows.length} rows
         </footer>
       )}
