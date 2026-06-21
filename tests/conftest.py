@@ -119,6 +119,11 @@ class FakeStore:
         if cap:
             cap.manifest.reuse_count += 1
 
+    async def update_provenance(self, cap_id, provenance):
+        cap = self._caps.get(cap_id)
+        if cap:
+            cap.manifest.provenance = provenance
+
     # read
     async def get(self, cap_id):
         return self._caps.get(cap_id)

@@ -72,6 +72,38 @@ ALLOWED_NAMES = set(SAFE_BUILTINS) | {
 FORBIDDEN_ATTRS = {"mro", "with_traceback", "add_note"}
 
 
+def scope_facts(code: str) -> dict:
+    """AST-derived facts about generated logic, for provenance display.
+
+    Pure read of the source — does not change verify()'s contract. Counts
+    data-layer calls on `clinic_data`, import statements, and dunder attribute
+    accesses, and lists the data methods invoked.
+    """
+    tree = ast.parse(code)
+    data_calls, imports, dunders = 0, 0, 0
+    methods: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            imports += 1
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr.startswith("__")
+            and node.attr.endswith("__")
+        ):
+            dunders += 1
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            target = node.func.value
+            if isinstance(target, ast.Name) and target.id == "clinic_data":
+                data_calls += 1
+                methods.append(node.func.attr)
+    return {
+        "data_calls": data_calls,
+        "imports": imports,
+        "dunders": dunders,
+        "methods": methods,
+    }
+
+
 class ScopeViolation(Exception):
     pass
 

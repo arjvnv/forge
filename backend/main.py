@@ -211,6 +211,35 @@ async def get_capability(capability_id: str):
     return cap.model_dump()
 
 
+@app.get("/intelligence/stream")
+async def intelligence_stream(count: int = 200):
+    """Read-only view of the most recent global build-events (for the dashboard).
+
+    Pure read of the existing forge:build-events stream via XREVRANGE — no writes,
+    no side effects, no blocking xread. `count` is clamped to bound the scan.
+    """
+    count = max(1, min(count, 1000))
+    store: CapabilityStore = app.state.store
+    raw = await store.recent_events(count=count)
+    events = []
+    for e in raw:
+        try:
+            payload = json.loads(e.get("payload", "{}"))
+        except Exception:
+            payload = {}
+        events.append(
+            {
+                "id": e.get("id"),
+                "capability_id": e.get("capability_id", ""),
+                "stage": e.get("stage", ""),
+                "message": e.get("message", ""),
+                "payload": payload,
+                "ts": float(e.get("ts", 0.0)),
+            }
+        )
+    return {"events": events}
+
+
 @app.post("/capabilities/{capability_id}/run")
 async def run_capability(capability_id: str, body: RunRequest):
     store: CapabilityStore = app.state.store

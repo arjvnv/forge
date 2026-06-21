@@ -111,6 +111,30 @@ async def test_full_build_happy_path(store, clinic):
     # No in-band neighbor seeded -> synthesized from scratch.
     assert synth_event.payload["built_from"] == []
 
+    # The gap event carries best_similarity (additive enrichment for the dashboard).
+    gap_event = next(e for e in events if e.stage == "gap")
+    assert "best_similarity" in gap_event.payload
+    # The routing event carries the real query text (Q1 option A).
+    routing_event = next(e for e in events if e.stage == "routing")
+    assert routing_event.payload["text"] == "new tool"
+
+    # Provenance was persisted on the installed capability (additive, post-`done`).
+    prov = installed.manifest.provenance
+    assert prov is not None
+    assert prov.build_cost == 18  # 11 input + 7 output
+    assert prov.input_tokens == 11 and prov.output_tokens == 7
+    assert prov.first_run_ms >= 0
+    # One trace step per emitted build stage (routing..done == 10 stages).
+    assert len(prov.trace) == 10
+    assert prov.trace[0].stage == "routing"
+    assert prov.trace[-1].stage == "done"
+    # Verification facts come from the real AST scan of GOOD_LOGIC.
+    assert prov.verification["imports"] == 0
+    assert prov.verification["dunders"] == 0
+    assert prov.verification["data_calls"] >= 1
+    assert prov.verification["sandbox_valid"] is True
+    assert prov.verification["all_on_allowlist"] is True
+
 
 async def test_synthesis_error_stops(store, clinic):
     loop = _build_loop(store, clinic)
