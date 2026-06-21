@@ -16,6 +16,9 @@ sqlalchemy==2.0.35
 # Anthropic
 anthropic==0.40.0
 
+# Multi-agent swarm baseline
+crewai>=0.80.0
+
 # Eval / data science
 pandas==2.2.3
 numpy==1.26.4

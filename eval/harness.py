@@ -106,8 +106,10 @@ async def run_eval() -> dict:
     results = {}
     for measure_id, gt in ground_truth.items():
         spec_text = MEASURE_SPECS[measure_id]
-        forge_numerator_runs = []
-        swarm_numerator_runs = []
+        forge_numerator_runs: list[list[str]] = []
+        forge_excluded_runs: list[list[str]] = []
+        swarm_numerator_runs: list[list[str]] = []
+        swarm_excluded_runs: list[list[str]] = []
         forge_tokens_total = 0
         swarm_tokens_total = 0
 
@@ -120,6 +122,7 @@ async def run_eval() -> dict:
                         measure_id, spec_text, cycle, clinic_data
                     )
                     forge_numerator_runs.append(f_result.numerator)
+                    forge_excluded_runs.append(f_result.excluded)
                     forge_tokens_total += f_in + f_out
                     print(f"  Forge  cycle={cycle} k={k} latency={f_ms:.0f}ms tokens={f_in+f_out}")
                 except NotImplementedError:
@@ -131,29 +134,32 @@ async def run_eval() -> dict:
                         measure_id, spec_text, clinic_data
                     )
                     swarm_numerator_runs.append(s_result.numerator)
+                    swarm_excluded_runs.append(s_result.excluded)
                     swarm_tokens_total += s_in + s_out
                     print(f"  Swarm  cycle={cycle} k={k} latency={s_ms:.0f}ms tokens={s_in+s_out}")
                 except NotImplementedError:
                     print(f"  Swarm  cycle={cycle} k={k} STUB — skipping")
 
-        # Score (only if we have runs)
+        # Score against ground truth (only if we have runs)
         gt_numerator = gt.get("numerator", [])
         gt_excluded = gt.get("excluded", [])
 
         measure_results = {"measure_id": measure_id}
         if forge_numerator_runs:
-            last_forge = forge_numerator_runs[-1]
+            last_forge_num = forge_numerator_runs[-1]
+            last_forge_excl = forge_excluded_runs[-1] if forge_excluded_runs else []
             measure_results["forge"] = {
-                **precision_recall_f1(last_forge, gt_numerator),
-                "exclusion_accuracy": exclusion_accuracy([], gt_excluded),
+                **precision_recall_f1(last_forge_num, gt_numerator),
+                "exclusion_accuracy": exclusion_accuracy(last_forge_excl, gt_excluded),
                 "consistency": mean_pairwise_jaccard(forge_numerator_runs),
                 "total_tokens": forge_tokens_total,
             }
         if swarm_numerator_runs:
-            last_swarm = swarm_numerator_runs[-1]
+            last_swarm_num = swarm_numerator_runs[-1]
+            last_swarm_excl = swarm_excluded_runs[-1] if swarm_excluded_runs else []
             measure_results["swarm"] = {
-                **precision_recall_f1(last_swarm, gt_numerator),
-                "exclusion_accuracy": exclusion_accuracy([], gt_excluded),
+                **precision_recall_f1(last_swarm_num, gt_numerator),
+                "exclusion_accuracy": exclusion_accuracy(last_swarm_excl, gt_excluded),
                 "consistency": mean_pairwise_jaccard(swarm_numerator_runs),
                 "total_tokens": swarm_tokens_total,
             }
