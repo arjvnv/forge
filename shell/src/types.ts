@@ -40,10 +40,15 @@ export interface Manifest {
   built_from?: BuiltFrom[];
 }
 
+import type { ChartSpec } from './chart/types';
+
 export interface UiSpec {
   type: string;
   columns: string[];
   title: string;
+  /** Optional purpose-backed chart recipe (Visualize feature). Treated as
+   *  untrusted data on the client and validated before rendering. */
+  chart?: ChartSpec;
 }
 
 export interface Capability {
