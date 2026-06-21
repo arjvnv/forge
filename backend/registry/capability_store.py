@@ -19,6 +19,7 @@ from backend.schemas import Capability, Manifest, BuildEvent
 CAPABILITY_KEY_PREFIX = "forge:cap:"
 VECTOR_INDEX_NAME = "forge-capabilities"
 STREAM_KEY = "forge:build-events"
+STREAM_MAXLEN = 10000  # cap global event-bus growth (approximate trim)
 
 
 _SCHEMA = {
@@ -104,16 +105,30 @@ class CapabilityStore:
     # ── event bus ──────────────────────────────────────────────────────────
 
     async def emit(self, event: BuildEvent):
-        await self._redis.xadd(STREAM_KEY, {
-            "capability_id": event.capability_id,
-            "stage": event.stage,
-            "message": event.message,
-            "payload": json.dumps(event.payload),
-            "ts": str(time.time()),
-        })
+        # Cap stream length so a long-running server can't grow the global event
+        # bus without bound. approximate=True lets Redis trim efficiently.
+        await self._redis.xadd(
+            STREAM_KEY,
+            {
+                "capability_id": event.capability_id,
+                "stage": event.stage,
+                "message": event.message,
+                "payload": json.dumps(event.payload),
+                "ts": str(time.time()),
+            },
+            maxlen=STREAM_MAXLEN,
+            approximate=True,
+        )
 
-    async def read_events(self, last_id: str = "0", count: int = 100) -> list[dict]:
-        entries = await self._redis.xread({STREAM_KEY: last_id}, count=count, block=0)
+    async def read_events(
+        self, last_id: str = "0", count: int = 100, block_ms: int = 500
+    ) -> list[dict]:
+        # block_ms must be finite: a blocking xread that is cancelled by an outer
+        # asyncio.wait_for leaves the underlying Redis connection blocked, which
+        # leaks pool connections under repeated SSE connect/timeout cycles (DoS).
+        entries = await self._redis.xread(
+            {STREAM_KEY: last_id}, count=count, block=block_ms
+        )
         if not entries:
             return []
         _, messages = entries[0]

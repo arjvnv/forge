@@ -53,8 +53,11 @@ class MeasureResult(BaseModel):
 
 
 class IntentRequest(BaseModel):
-    text: str
-    measurement_year: int = 2023
+    # Bounds are a DoS/cost guard: text feeds the (unauthenticated) Claude
+    # synthesis + OpenAI embedding calls, so an unbounded string is unbounded
+    # spend. measurement_year is range-checked so it can't be a wild int.
+    text: str = Field(min_length=1, max_length=4000)
+    measurement_year: int = Field(default=2023, ge=1900, le=2100)
 
 
 class RouteResult(BaseModel):

@@ -4,6 +4,8 @@ Returns a cache hit (reuse) or signals a gap (build).
 """
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from backend.config import settings
@@ -11,10 +13,7 @@ from backend.registry.capability_store import CapabilityStore
 from backend.schemas import RouteResult
 
 
-async def embed(text: str) -> list[float]:
-    if not settings.openai_api_key:
-        # Graceful degrade: routing always misses, build loop still works without embeddings.
-        return [0.0] * 1536
+def _embed_sync(text: str) -> list[float]:
     resp = httpx.post(
         "https://api.openai.com/v1/embeddings",
         headers={"Authorization": f"Bearer {settings.openai_api_key}"},
@@ -24,6 +23,15 @@ async def embed(text: str) -> list[float]:
     if resp.status_code != 200:
         return [0.0] * 1536
     return resp.json()["data"][0]["embedding"]
+
+
+async def embed(text: str) -> list[float]:
+    if not settings.openai_api_key:
+        # Graceful degrade: routing always misses, build loop still works without embeddings.
+        return [0.0] * 1536
+    # httpx.post is blocking; offload to a thread so the event loop stays free.
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _embed_sync, text)
 
 
 class Router:
