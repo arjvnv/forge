@@ -25,8 +25,10 @@ class StubSynth:
         self.last_output_tokens = 0
         self._input_tokens = input_tokens
         self._output_tokens = output_tokens
+        self.received_prior = None
 
-    async def synthesize(self, intent, measurement_year=2023):
+    async def synthesize(self, intent, measurement_year=2023, prior_patterns=None):
+        self.received_prior = prior_patterns
         if self._error:
             raise self._error
         self.last_input_tokens = self._input_tokens
@@ -106,6 +108,8 @@ async def test_full_build_happy_path(store, clinic):
     synth_event = next(e for e in events if e.stage == "synthesized")
     assert synth_event.payload["input_tokens"] == 11
     assert synth_event.payload["output_tokens"] == 7
+    # No in-band neighbor seeded -> synthesized from scratch.
+    assert synth_event.payload["built_from"] == []
 
 
 async def test_synthesis_error_stops(store, clinic):
@@ -169,3 +173,36 @@ async def test_reuse_falls_through_when_indexed_cap_missing(store, clinic):
     stages = [e.stage for e in events]
     assert stages[:3] == ["routing", "gap", "synthesizing"]
     assert stages[-1] == "done"
+
+
+async def test_compounding_injects_in_band_neighbor(store, clinic):
+    # Seed a neighbor whose similarity falls in [floor, threshold): distance 0.5 -> sim 0.5.
+    neighbor = make_capability(cap_id="neighbor-1")
+    neighbor.manifest.name = "Diabetes Eye Exam"
+    await store.save(neighbor, [0.0] * 1536)
+    # Below the reuse threshold (0.62) -> routing MISS, but in-band for compounding.
+    store.set_route_hit("neighbor-1", distance=0.5)
+
+    synthesized = make_capability(logic=GOOD_LOGIC, cap_id="claude-generated-id")
+    loop = _build_loop(store, clinic)
+    loop.synthesizer = StubSynth(capability=synthesized)
+
+    events = []
+    gen = loop.run(IntentRequest(text="similar tool"), "build-7")
+    async for e in gen:
+        events.append(e)
+        if e.stage == "verified":
+            await loop.approve("build-7")
+
+    synth_event = next(e for e in events if e.stage == "synthesized")
+    built_from = synth_event.payload["built_from"]
+    assert len(built_from) == 1
+    assert built_from[0] == {
+        "id": "neighbor-1",
+        "name": "Diabetes Eye Exam",
+        "similarity": 0.5,
+    }
+    # The synthesizer received the prior pattern.
+    assert loop.synthesizer.received_prior is not None
+    assert len(loop.synthesizer.received_prior) == 1
+    assert loop.synthesizer.received_prior[0].manifest.id == "neighbor-1"

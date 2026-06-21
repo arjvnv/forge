@@ -138,6 +138,23 @@ class FakeStore:
         name = cap.manifest.name if cap else ""
         return [{"id": cap_id, "name": name, "vector_distance": distance}]
 
+    async def get_adjacent(
+        self, embedding, k, max_similarity, min_similarity, exclude_ids=None
+    ):
+        exclude_ids = exclude_ids or set()
+        if self._route_hit is None:
+            return []
+        distance, cap_id = self._route_hit
+        similarity = 1.0 - distance
+        if not (min_similarity <= similarity < max_similarity):
+            return []
+        if cap_id in exclude_ids:
+            return []
+        cap = self._caps.get(cap_id)
+        if cap is None:
+            return []
+        return [(cap, similarity)]
+
     # event bus
     async def emit(self, event: BuildEvent):
         import json

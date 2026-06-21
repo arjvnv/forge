@@ -42,7 +42,7 @@ class Router:
         embedding = await embed(intent)
         results = await self.store.search(embedding, top_k=1)
         if not results:
-            return RouteResult(hit=False)
+            return RouteResult(hit=False, embedding=embedding)
 
         top = results[0]
         # RedisVL returns cosine distance; convert to similarity
@@ -63,5 +63,6 @@ class Router:
                 hit=True,
                 capability_id=cap_id,
                 similarity=similarity,
+                embedding=embedding,
             )
-        return RouteResult(hit=False, similarity=similarity)
+        return RouteResult(hit=False, similarity=similarity, embedding=embedding)

@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncGenerator, Optional
 
+from backend.config import settings
 from backend.data.clinic_data import ClinicDataLayer
 from backend.kernel.executor import Executor, ExecutionError
 from backend.kernel.installer import Installer
@@ -126,15 +127,50 @@ class BuildLoop:
                 "No existing capability found. Building new one...",
             )
 
+        # ── retrieve adjacent band (compounding) ──────────────────────────────
+        # Non-fatal enrichment: any failure degrades silently to from-scratch
+        # synthesis. Both the gap branch and the missing-indexed-cap fall-through
+        # converge here before synthesizing.
+        adjacent: list[tuple[Capability, float]] = []
+        if route.embedding is not None:
+            excl = {route.capability_id} if route.capability_id else set()
+            try:
+                adjacent = await self.store.get_adjacent(
+                    route.embedding,
+                    settings.compounding_top_k,
+                    settings.similarity_threshold,
+                    settings.compounding_relevance_floor,
+                    exclude_ids=excl,
+                )
+            except Exception:
+                adjacent = []
+
+        built_from = [
+            {"id": c.manifest.id, "name": c.manifest.name, "similarity": round(s, 4)}
+            for c, s in adjacent
+        ]
+        prior = [c for c, _ in adjacent]
+
         # ── synthesizing ─────────────────────────────────────────────────────
+        if prior:
+            names = ", ".join(c.manifest.name for c in prior)
+            n = len(prior)
+            synth_message = (
+                f"Synthesizing from {n} proven pattern"
+                f"{'s' if n != 1 else ''}: {names}"
+            )
+        else:
+            synth_message = "Synthesizing from scratch"
         yield await self._emit(
             capability_id,
             "synthesizing",
-            "Generating capability logic with Claude...",
+            synth_message,
         )
         try:
             capability: Capability = await self.synthesizer.synthesize(
-                request.text, request.measurement_year
+                request.text,
+                request.measurement_year,
+                prior_patterns=prior or None,
             )
         except SynthesisError as e:
             yield await self._emit(capability_id, "error", str(e))
@@ -157,6 +193,7 @@ class BuildLoop:
                 "manifest": capability.manifest.model_dump(),
                 "input_tokens": self.synthesizer.last_input_tokens,
                 "output_tokens": self.synthesizer.last_output_tokens,
+                "built_from": built_from,
             },
         )
 

@@ -123,6 +123,45 @@ class CapabilityStore:
         results = await self._index.query(q)
         return results
 
+    async def get_adjacent(
+        self,
+        embedding: list[float],
+        k: int,
+        max_similarity: float,      # exclusive upper bound (settings.similarity_threshold)
+        min_similarity: float,      # inclusive lower bound (settings.compounding_relevance_floor)
+        exclude_ids: Optional[set[str]] = None,
+    ) -> list[tuple[Capability, float]]:
+        """Return up to k full Capabilities (WITH logic) whose cosine similarity to
+        `embedding` falls in [min_similarity, max_similarity), nearest first, excluding
+        any id in exclude_ids. Each tuple is (capability, similarity)."""
+        exclude_ids = exclude_ids or set()
+        # Request k+1 so we can still fill k in-band when the single nearest result
+        # is the excluded exact-reuse hit.
+        results = await self.search(embedding, top_k=k + 1)
+
+        adjacent: list[tuple[Capability, float]] = []
+        for r in results:
+            if len(adjacent) >= k:
+                break
+            distance = float(r.get("vector_distance", 1.0))
+            similarity = 1.0 - distance
+            if not (min_similarity <= similarity < max_similarity):
+                continue
+            raw_id = r.get("id", "")
+            cap_id = (
+                raw_id[len(CAPABILITY_KEY_PREFIX):]
+                if raw_id.startswith(CAPABILITY_KEY_PREFIX)
+                else raw_id
+            )
+            if cap_id in exclude_ids:
+                continue
+            cap = await self.get(cap_id)
+            if cap is None:
+                # Index points at a deleted capability; skip it.
+                continue
+            adjacent.append((cap, similarity))
+        return adjacent
+
     # ── event bus ──────────────────────────────────────────────────────────
 
     async def emit(self, event: BuildEvent):

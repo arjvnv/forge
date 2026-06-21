@@ -64,3 +64,4 @@ class RouteResult(BaseModel):
     hit: bool
     capability_id: Optional[str] = None
     similarity: float = 0.0
+    embedding: Optional[list[float]] = None   # the query embedding, reused downstream
